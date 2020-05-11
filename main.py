@@ -14,7 +14,7 @@ from MiddleWare import CGALEDRawData, CGALEDLabels, keysFunc, getSeriesId, CCRNN
 the *_data.csv files contain the raw 32 channels EEG data (sampling rate 500Hz)
 the *_events.csv files contains the ground truth frame-wise labels for all events
 '''
-stageList = [1,7]
+stageList = [1,7,8]
 
 
 dirList = ['Root','Train','Test','MiddleStage','Output','Models']
@@ -158,19 +158,34 @@ if oStageCtrl(7) is True:
     
         del oDataTemp
         del oEventTemp
-        break
-    
+        if(idx >=7):
+            break
+
+if oStageCtrl(8) is True:    
     cnnDir = oDir['Models']+'RCNN_CNN.yml'
     denseDir = oDir['Models']+'RCNN_Dense.yml'
     oCRNN = CCRNN(cnnDir,denseDir,256,100).cuda()
     oDataRecordTrain = oDataOrgTrain.dataRecordBasedOnTime()
+    oDataRecordTest = oDataOrgTest.dataRecordBasedOnTime()
     oDataLoaderTrans = CDataRecordToDataLoader()
     
-    args = {'DataRecordArgs':{'window':100},'DataLoaderArgs':{'shuffle':True,'batch_size':100}}
-    trainDataLoader = oDataLoaderTrans(oDataRecordTrain,CSlidingWinDataset,**args)
+    argsTrain = {'DataRecordArgs':{'window':100},
+            'DataLoaderArgs':{'shuffle':False,'batch_size':100},
+            'SamplerArgs':{'replacement':True,'num_samples':50000}
+            }
+    
+    argsTest = {'DataRecordArgs':{'window':100},
+            'DataLoaderArgs':{'shuffle':False,'batch_size':100},
+            'SamplerArgs':{'replacement':True,'num_samples':10000}
+            }
+    
     pytorchRoot = CPytorch().Lib
+    samplerType = pytorchRoot.utils.data.RandomSampler
+    trainDataLoader = oDataLoaderTrans(oDataRecordTrain,CSlidingWinDataset,samplerType,**argsTrain)
+    testDataLoader = oDataLoaderTrans(oDataRecordTest,CSlidingWinDataset,samplerType,**argsTest)
+    
     oLossFunc = pytorchRoot.nn.BCELoss()
-    CPytorch().trainClassificationModel(oCRNN,trainDataLoader,10,0.001,0.001,oLossFunc)
+    metrics = CPytorch().trainClassificationModel(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
     #load model 
 #    oDataOrgTrain
     #train
