@@ -7,14 +7,15 @@ from StellarBrainwav.outsideLibInterfaces import CIfMNE
 from StellarBrainwav.Helper.StageControl import CStageControl
 from StellarBrainwav.Helper.DataObjectTransform import CEpochToDataLoader, CDataRecordToDataLoader
 from StellarBrainwav.DataProcessing.DeepLearning import CTorchNNYaml,CPytorch
-from MiddleWare import CGALEDRawData, CGALEDLabels, keysFunc, getSeriesId, CCRNN,CSlidingWinDataset #getSeriesName, getSubjectName, getSeqIndex,
+from StellarBrainwav.DataProcessing.SignalProcessing import MNECutInFreqBands
+from MiddleWare import CGALEDRawData, CGALEDLabels, keysFunc, getSeriesId, CCRNN,CSlidingWinDataset,CCRNNChannels #getSeriesName, getSubjectName, getSeqIndex,
 
 
 '''
 the *_data.csv files contain the raw 32 channels EEG data (sampling rate 500Hz)
 the *_events.csv files contains the ground truth frame-wise labels for all events
 '''
-stageList = [1,7,8]
+stageList = [1,7,9]
 
 
 dirList = ['Root','Train','Test','MiddleStage','Output','Models']
@@ -189,8 +190,49 @@ if oStageCtrl(8) is True:
     #load model 
 #    oDataOrgTrain
     #train
+
+if oStageCtrl(9) is True:
+    cnnDir = oDir['Models']+'RCNN_CNN_4channels.yml'
+    denseDir = oDir['Models']+'RCNN_Dense.yml'
     
+    oDataRecordTrain = oDataOrgTrain.dataRecordBasedOnTime()
+    oDataRecordTest = oDataOrgTest.dataRecordBasedOnTime()
     
+    oRawTrain = oMNE.getMNERaw(oDataRecordTrain.data)
+    oRawTest = oMNE.getMNERaw(oDataRecordTest.data)
+    
+    bands = [0.5,4,7,15,30]
+    
+    oBandedDataTrain = MNECutInFreqBands(oRawTrain,bands)
+    oBandedDataTest = MNECutInFreqBands(oRawTest,bands)
+    
+    oDataRecordTrain.data = oBandedDataTrain
+    oDataRecordTest.data  = oBandedDataTest
+    
+    oDataLoaderTrans = CDataRecordToDataLoader()
+    
+    argsTrain = {'DataRecordArgs':{'window':100},
+            'DataLoaderArgs':{'shuffle':False,'batch_size':100},
+            'SamplerArgs':{'replacement':True,'num_samples':50000}
+            }
+    
+    argsTest = {'DataRecordArgs':{'window':100},
+            'DataLoaderArgs':{'shuffle':False,'batch_size':100},
+            'SamplerArgs':{'replacement':True,'num_samples':10000}
+            }
+    
+    pytorchRoot = CPytorch().Lib
+    samplerType = pytorchRoot.utils.data.RandomSampler
+    trainDataLoader = oDataLoaderTrans(oDataRecordTrain,CSlidingWinDataset,samplerType,**argsTrain)
+    testDataLoader = oDataLoaderTrans(oDataRecordTest,CSlidingWinDataset,samplerType,**argsTest)
+#    import sys
+#    sys.exit()
+    oLossFunc = pytorchRoot.nn.BCELoss()
+    
+    oCRNN = CCRNNChannels(cnnDir,denseDir,256,100).cuda()
+    metrics = CPytorch().trainClassificationModel(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
+    
+
 #oData = CGALEDRawData(500)
 #oData.readFile(dataFiles[0])l
 #oEvent = CGALEDLabels()

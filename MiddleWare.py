@@ -102,16 +102,48 @@ class CCRNN(pytorchRoot.nn.Module):
         xDenseOut = self.oDense(xLSTMOut[0][-1])
         return xDenseOut
 
+class CCRNNChannels(pytorchRoot.nn.Module):
+    def __init__(self,cnnDir,denseDir,lstmInSize,lstmHidSize):
+        super().__init__()
+        self.oLstm = nn.LSTM(input_size = lstmInSize,hidden_size = lstmHidSize)
+        oCNNYaml = CTorchNNYaml()
+        self.oCNN = oCNNYaml(cnnDir)
+        self.oDense = oCNNYaml(denseDir)
+        
+    def forward(self,x):
+        #input shape (num_seq, batch, input_size)     
+        
+        xCNNList = list()
+        for i in range(x.shape[0]):
+#            print(x[i])
+            xCNNTemp = x[i] # shape (batch,input_size)
+            xCNNTemp1 = xCNNTemp
+            xCNNOutTemp = self.oCNN(xCNNTemp1)# shape (batch,output_size)
+            xCNNOutTemp = xCNNOutTemp.view(1,xCNNOutTemp.shape[0],xCNNOutTemp.shape[1])
+            xCNNList.append(xCNNOutTemp) 
+        
+        xCNNOut = pytorchRoot.cat(xCNNList,0)
+        xLSTMOut = self.oLstm(xCNNOut)
+        xDenseOut = self.oDense(xLSTMOut[0][-1])
+        return xDenseOut
+
 class CSlidingWinDataset(pytorchRoot.utils.data.Dataset):
     
     def __init__(self, *tensors,window):
         assert all(tensors[0].size(0) == tensor.size(0) for tensor in tensors)
-        zeroTensor = pytorchRoot.cuda.FloatTensor([0])
+        zeroTensor = pytorchRoot.FloatTensor([0])
 #        print(tensors[0].size())
-        paddingTensor = zeroTensor.expand(window-1,tensors[0].size(1))
+        shape = list()
+        for i in range(1,len(tensors[0].shape)):
+            shape.append(tensors[0].shape[i])
+            
+        paddingTensor = zeroTensor.expand(window-1,*shape)
         self.window = window
 #        self.tensors = tensors
-        self.tensors = (pytorchRoot.cat([paddingTensor,tensors[0]]),) + tensors[1:]
+        Temp = (pytorchRoot.cat([paddingTensor,tensors[0]]),) + tensors[1:]
+        self.tensors = tuple()
+        for i in range(len(Temp)):
+            self.tensors += (Temp[i].cuda(),)
 
     def __getitem__(self, index):
         return tuple(tensor[index : self.window + index] if idx==0 else tensor[index] for idx,tensor in enumerate(self.tensors))
