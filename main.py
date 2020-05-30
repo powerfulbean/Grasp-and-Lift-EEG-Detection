@@ -15,7 +15,7 @@ from MiddleWare import CGALEDRawData, CGALEDLabels, keysFunc, getSeriesId, CCRNN
 the *_data.csv files contain the raw 32 channels EEG data (sampling rate 500Hz)
 the *_events.csv files contains the ground truth frame-wise labels for all events
 '''
-stageList = [1,7,9]
+stageList = [1,7,8]
 
 
 dirList = ['Root','Train','Test','MiddleStage','Output','Models']
@@ -31,8 +31,8 @@ dataFiles = getFileList(oDir['Train'],dataExt)
 oData = CGALEDRawData(500)
 oData.readFile(dataFiles[0])
 chanList = oData.description['chName']
-oMNE = CIfMNE(chanList,500,'eeg',oLog = oLog)
-oMNE.Montage = oMNE.LibMNE.channels.read_montage('chanlabels_32channel_test',path = oDir['Root'])
+#oMNE = CIfMNE(chanList,500,'eeg',oLog = oLog)
+#oMNE.Montage = oMNE.LibMNE.channels.read_montage('chanlabels_32channel_test',path = oDir['Root'])
 
 if oStageCtrl(1) is True:
     dataFiles = getFileList(oDir['Train'],dataExt)
@@ -172,12 +172,12 @@ if oStageCtrl(8) is True:
     
     argsTrain = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':100},
-            'SamplerArgs':{'replacement':True,'num_samples':50000}
+            'SamplerArgs':{'replacement':True,'num_samples':500}
             }
     
     argsTest = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':100},
-            'SamplerArgs':{'replacement':True,'num_samples':10000}
+            'SamplerArgs':{'replacement':True,'num_samples':200}
             }
     
     pytorchRoot = CPytorch().Lib
@@ -187,6 +187,12 @@ if oStageCtrl(8) is True:
     
     oLossFunc = pytorchRoot.nn.BCELoss()
     metrics = CPytorch().trainClassificationModel(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
+    
+    oLog.safeRecord('#train_loss\ttest_loss\ttrain_accu\ttest_accu')
+    for metric in metrics:
+        logTemp = str(metric[0]) + '\t' + str(metric[1]) + '\t' + str(metric[2]) + '\t' + str(metric[3])
+        oLog.safeRecord(logTemp)
+    
     #load model 
 #    oDataOrgTrain
     #train
@@ -213,12 +219,12 @@ if oStageCtrl(9) is True:
     
     argsTrain = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':100},
-            'SamplerArgs':{'replacement':True,'num_samples':50000}
+            'SamplerArgs':{'replacement':True,'num_samples':100000}
             }
     
     argsTest = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':100},
-            'SamplerArgs':{'replacement':True,'num_samples':10000}
+            'SamplerArgs':{'replacement':True,'num_samples':50000}
             }
     
     pytorchRoot = CPytorch().Lib
