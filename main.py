@@ -37,6 +37,8 @@ chanList = oData.description['chName']
 if oStageCtrl(1) is True:
     dataFiles = getFileList(oDir['Train'],dataExt)
     eventFiles = getFileList(oDir['Train'],eventsExt)
+    dataFiles.sort()
+    eventFiles.sort()
     oData = CGALEDRawData(500)
     oData.readFile(dataFiles[0])
     oEvent = CGALEDLabels()
@@ -171,13 +173,13 @@ if oStageCtrl(8) is True:
     oDataLoaderTrans = CDataRecordToDataLoader()
     
     argsTrain = {'DataRecordArgs':{'window':100},
-            'DataLoaderArgs':{'shuffle':False,'batch_size':100},
-            'SamplerArgs':{'replacement':True,'num_samples':500}
+            'DataLoaderArgs':{'shuffle':False,'batch_size':200},
+            'SamplerArgs':{'replacement':True,'num_samples':2000}
             }
     
     argsTest = {'DataRecordArgs':{'window':100},
-            'DataLoaderArgs':{'shuffle':False,'batch_size':100},
-            'SamplerArgs':{'replacement':True,'num_samples':200}
+            'DataLoaderArgs':{'shuffle':False,'batch_size':200},
+            'SamplerArgs':{'replacement':True,'num_samples':2000}
             }
     
     pytorchRoot = CPytorch().Lib

@@ -80,26 +80,26 @@ nn = pytorchRoot.nn
 class CCRNN(pytorchRoot.nn.Module):
     def __init__(self,cnnDir,denseDir,lstmInSize,lstmHidSize):
         super().__init__()
-        self.oLstm = nn.LSTM(input_size = lstmInSize,hidden_size = lstmHidSize)
+        self.oLstm = nn.LSTM(input_size = lstmInSize,hidden_size = lstmHidSize,batch_first = True)
         oCNNYaml = CTorchNNYaml()
         self.oCNN = oCNNYaml(cnnDir)
         self.oDense = oCNNYaml(denseDir)
         
     def forward(self,x):
-        #input shape (num_seq, batch, input_size)     
+        #input shape ( batch, num_seq,input_size)     
         
         xCNNList = list()
-        for i in range(x.shape[0]):
+        for i in range(x.shape[1]):
 #            print(x[i])
-            xCNNTemp = x[i] # shape (batch,input_size)
-            xCNNTemp1 = xCNNTemp.view(x[i].shape[0],1,x[i].shape[1])
+            xCNNTemp = x[:,i,:] # shape (batch,input_size)
+            xCNNTemp1 = xCNNTemp.view(xCNNTemp.shape[0],1,xCNNTemp.shape[1])
             xCNNOutTemp = self.oCNN(xCNNTemp1)# shape (batch,output_size)
-            xCNNOutTemp = xCNNOutTemp.view(1,xCNNOutTemp.shape[0],xCNNOutTemp.shape[1])
+            xCNNOutTemp = xCNNOutTemp.view(xCNNOutTemp.shape[0],1,xCNNOutTemp.shape[1]) #shape (batch,num_seq,output_size)
             xCNNList.append(xCNNOutTemp) 
         
-        xCNNOut = pytorchRoot.cat(xCNNList,0)
+        xCNNOut = pytorchRoot.cat(xCNNList,1) #shape (batch,num_seq,output_size)
         xLSTMOut = self.oLstm(xCNNOut)
-        xDenseOut = self.oDense(xLSTMOut[0][-1])
+        xDenseOut = self.oDense(xLSTMOut[0][:,-1,:])
         return xDenseOut
 
 class CCRNNChannels(pytorchRoot.nn.Module):
