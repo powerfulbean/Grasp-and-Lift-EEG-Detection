@@ -31,8 +31,8 @@ dataFiles = getFileList(oDir['Train'],dataExt)
 oData = CGALEDRawData(500)
 oData.readFile(dataFiles[0])
 chanList = oData.description['chName']
-#oMNE = CIfMNE(chanList,500,'eeg',oLog = oLog)
-#oMNE.Montage = oMNE.LibMNE.channels.read_montage('chanlabels_32channel_test',path = oDir['Root'])
+oMNE = CIfMNE(chanList,500,'eeg',oLog = oLog)
+oMNE.Montage = oMNE.LibMNE.channels.read_montage('chanlabels_32channel_test',path = oDir['Root'])
 
 if oStageCtrl(1) is True:
     dataFiles = getFileList(oDir['Train'],dataExt)
