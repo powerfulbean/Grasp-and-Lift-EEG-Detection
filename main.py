@@ -1,15 +1,17 @@
 import sys
 sys.path.append('..')
-from StellarBrainwav.DataIO import CDirectoryConfig, getFileList,CLog
+#from StellarBrainwav.DataIO import CDirectoryConfig, getFileList,CLog
+from StellarInfra.DirManage import CDirectoryConfig,getFileList,getFileName,checkFolder
+from StellarInfra.Logger import CLog
 from StellarBrainwav.DataStruct.RawData import CRawData #LabelData, 
 from StellarBrainwav.DataStruct.DataSet import CDataOrganizorLite
-from StellarBrainwav.outsideLibInterfaces import CIfMNE
+from StellarBrainwav.outsideLibInterfaces import CIfMNE,CIfSklearn
 from StellarBrainwav.Helper.StageControl import CStageControl
-from StellarBrainwav.Helper.DataObjectTransform import CEpochToDataLoader, CDataRecordToDataLoader
-from StellarBrainwav.DataProcessing.DeepLearning import CTorchNNYaml,CPytorch
+from StellarBrainwav.Helper.DataObjectTransform import CEpochToDataLoader, CDataRecordToTensors, CRawDataToTensors
+from StellarBrainwav.DataProcessing.DeepLearning import CTorchNNYaml,CPytorch,CTorchClassify
 from StellarBrainwav.DataProcessing.SignalProcessing import MNECutInFreqBands
 from MiddleWare import CGALEDRawData, CGALEDLabels, keysFunc, getSeriesId, CCRNN,CSlidingWinDataset,CCRNNChannels #getSeriesName, getSubjectName, getSeqIndex,
-
+from MiddleWare import buildDataLoader,keysFuncFileName
 
 '''
 the *_data.csv files contain the raw 32 channels EEG data (sampling rate 500Hz)
@@ -23,7 +25,6 @@ dataExt = '_data.csv'
 eventsExt = '_events.csv'
 seriesForTest = [7,8]
 oDir = CDirectoryConfig(dirList,'Dataset.conf')
-oDir.checkFolders()
 
 oLog = CLog(oDir['Output'],'RunnningLog')
 oStageCtrl = CStageControl(stageList,oLog)
@@ -33,6 +34,7 @@ oData.readFile(dataFiles[0])
 chanList = oData.description['chName']
 oMNE = CIfMNE(chanList,500,'eeg',oLog = oLog)
 oMNE.Montage = oMNE.LibMNE.channels.read_montage('chanlabels_32channel_test',path = oDir['Root'])
+oSklearn = CIfSklearn()
 
 if oStageCtrl(1) is True:
     dataFiles = getFileList(oDir['Train'],dataExt)
@@ -165,35 +167,40 @@ if oStageCtrl(7) is True:
             break
 
 if oStageCtrl(8) is True:    
+    #to do:
+    # try different window size
     cnnDir = oDir['Models']+'RCNN_CNN.yml'
     denseDir = oDir['Models']+'RCNN_Dense.yml'
     oCRNN = CCRNN(cnnDir,denseDir,256,100).cuda()
     oDataRecordTrain = oDataOrgTrain.dataRecordBasedOnTime()
     oDataRecordTest = oDataOrgTest.dataRecordBasedOnTime()
-    oDataLoaderTrans = CDataRecordToDataLoader()
+    oTensorsTrans = CDataRecordToTensors()
     
     argsTrain = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':200},
-            'SamplerArgs':{'replacement':True,'num_samples':2000}
+            'SamplerArgs':{'replacement':True,'num_samples':200000}
             }
     
     argsTest = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':200},
-            'SamplerArgs':{'replacement':True,'num_samples':2000}
+            'SamplerArgs':{'replacement':True,'num_samples':200000}
             }
     
     pytorchRoot = CPytorch().Lib
     samplerType = pytorchRoot.utils.data.RandomSampler
-    trainDataLoader = oDataLoaderTrans(oDataRecordTrain,CSlidingWinDataset,samplerType,**argsTrain)
-    testDataLoader = oDataLoaderTrans(oDataRecordTest,CSlidingWinDataset,samplerType,**argsTest)
+    trainDataTensors = oTensorsTrans(oDataRecordTrain)
+    testDataTensors = oTensorsTrans(oDataRecordTest)
+    trainDataLoader = buildDataLoader(*trainDataTensors,TorchDataSetType = CSlidingWinDataset,oSamplerType = samplerType,**argsTrain)
+    testDataLoader = buildDataLoader(*testDataTensors,TorchDataSetType = CSlidingWinDataset,oSamplerType = samplerType,**argsTest)
     
     oLossFunc = pytorchRoot.nn.BCELoss()
-    metrics = CPytorch().trainClassificationModel(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
+    metrics = CTorchClassify().modelTranEval(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
     
     oLog.safeRecord('#train_loss\ttest_loss\ttrain_accu\ttest_accu')
     for metric in metrics:
         logTemp = str(metric[0]) + '\t' + str(metric[1]) + '\t' + str(metric[2]) + '\t' + str(metric[3])
         oLog.safeRecord(logTemp)
+    pytorchRoot.save(oCRNN,oDir['Output'] + 'KLGModel.pth')
     
     #load model 
 #    oDataOrgTrain
@@ -217,7 +224,7 @@ if oStageCtrl(9) is True:
     oDataRecordTrain.data = oBandedDataTrain
     oDataRecordTest.data  = oBandedDataTest
     
-    oDataLoaderTrans = CDataRecordToDataLoader()
+    oDataLoaderTrans = CDataRecordToTensors()
     
     argsTrain = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':100},
@@ -231,14 +238,76 @@ if oStageCtrl(9) is True:
     
     pytorchRoot = CPytorch().Lib
     samplerType = pytorchRoot.utils.data.RandomSampler
-    trainDataLoader = oDataLoaderTrans(oDataRecordTrain,CSlidingWinDataset,samplerType,**argsTrain)
-    testDataLoader = oDataLoaderTrans(oDataRecordTest,CSlidingWinDataset,samplerType,**argsTest)
+    pytorchRoot = CPytorch().Lib
+    samplerType = pytorchRoot.utils.data.RandomSampler
+    oTensorsTrans = CRawDataToTensors()
+    trainDataTensors = oTensorsTrans(oDataRecordTrain)
+    testDataTensors = oTensorsTrans(oDataRecordTest)
+    trainDataLoader = buildDataLoader(*trainDataTensors,TorchDataSetType = CSlidingWinDataset,oSamplerType = samplerType,**argsTrain)
+    testDataLoader = buildDataLoader(*testDataTensors,TorchDataSetType = CSlidingWinDataset,oSamplerType = samplerType,**argsTest)
 #    import sys
 #    sys.exit()
     oLossFunc = pytorchRoot.nn.BCELoss()
     
     oCRNN = CCRNNChannels(cnnDir,denseDir,256,100).cuda()
     metrics = CPytorch().trainClassificationModel(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
+    
+if oStageCtrl(10) is True:
+    import numpy as np
+    Model = pytorchRoot.load(oDir.Output+'KLGMOdel.pth')
+    dataFiles = getFileList(oDir.Test,dataExt)
+    dataFiles.sort()
+    kwargs = {'DataRecordArgs':{'window':100},
+            'DataLoaderArgs':{'batch_size':100},
+            }
+    
+    for file in dataFiles:
+        oData = CGALEDRawData(500)
+        oData.readFile(file)
+        oTensorsTrans = CRawDataToTensors()
+        tensors = oTensorsTrans(oData)
+        dataLoader = buildDataLoader(*tensors,TorchDataSetType = CSlidingWinDataset,oSamplerType = None, **kwargs)
+        Output = CTorchClassify().modelPredict(Model,dataLoader)
+        file,ext = getFileName(file)
+        np.save(oDir.Output + file,Output)
+        break
+        
+    
+if oStageCtrl(11) is True:
+    '''
+    calculate final result for submission
+    
+    '''
+    import numpy as np
+    dataFiles = getFileList(oDir.Test,dataExt)
+    dataFiles.sort(key=keysFuncFileName)
+    resultFilesFolder = oDir.Output+'result/'
+    resultExt = '.npy'
+    outputFolder = oDir.Output + 'submission/'
+    oLog = CLog(outputFolder,'submission','.csv')
+    oLog.ifPrint = False
+    oLog('id','HandStart','FirstDigitTouch','BothStartLoadPhase','LiftOff','Replace','BothReleased',splitChar=',')
+    for file in dataFiles:
+        filename,ext = getFileName(file)
+        oData = CGALEDRawData(500)
+        oData.readFile(file)
+        npArray = np.load(resultFilesFolder + filename + resultExt)
+#        npArray = (npArray >=0.5).astype(int)
+        oLog.Mode = 'fast'
+        for idx,timestamp in enumerate(oData.timestamps):
+            oLog(timestamp,splitChar=',',newline=False)
+            oLog(*npArray[idx],splitChar=',')
+        oLog.Save()
+    
+if oStageCtrl(12):
+    # for testing sklearn roc_auc_score in Multilabel problem
+    import numpy as np
+    oSklearn = CIfSklearn()
+    skMetrics = getattr(oSklearn.Lib,'metrics')
+    avg = skMetrics.roc_auc_score(np.array([[1,1,1],[1,0,1],[0,1,0]]),np.array([[0.2,0.8,0.3],[0.9,0.6,0.4],[0.6,0.7,0.5]]))
+    s1 = skMetrics.roc_auc_score([1,1,0],[0.2,0.9,0.6])
+    s2 = skMetrics.roc_auc_score([1,0,1],[0.8,0.6,0.7])
+    print(avg,s1,s2)
     
 
 #oData = CGALEDRawData(500)

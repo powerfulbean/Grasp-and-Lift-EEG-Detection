@@ -15,7 +15,7 @@ import pandas as pd
 class CGALEDRawData(CRawData):
     
     def __init__(self,srate):
-        super(CGALEDRawData,self).__init__()
+        super().__init__()
         self.sampleRate = srate
     
     def readFile(self,fileName):
@@ -74,6 +74,13 @@ def keysFunc(timestamp:str):
     return (subjIndex,seriesIndex,seqIndex)
 
 
+def keysFuncFileName(filename:str):
+    subjName = getSubjectName(filename)
+    seriesName = getSeriesName(filename)
+    subjIndex = int(subjName[4:])
+    seriesIndex = int(seriesName[6:])
+    return (seriesIndex,subjIndex)
+
 pytorchRoot = CPytorch()._ImportTorch()
 nn = pytorchRoot.nn
 
@@ -87,7 +94,6 @@ class CCRNN(pytorchRoot.nn.Module):
         
     def forward(self,x):
         #input shape ( batch, num_seq,input_size)     
-        
         xCNNList = list()
         for i in range(x.shape[1]):
 #            print(x[i])
@@ -111,7 +117,7 @@ class CCRNNChannels(pytorchRoot.nn.Module):
         self.oDense = oCNNYaml(denseDir)
         
     def forward(self,x):
-        #input shape (num_seq, batch, input_size)     
+        #input shape ( batch, num_seq,input_size)     
         
         xCNNList = list()
         for i in range(x.shape[0]):
@@ -150,3 +156,30 @@ class CSlidingWinDataset(pytorchRoot.utils.data.Dataset):
 
     def __len__(self):
         return self.tensors[0].size(0) - self.window + 1
+    
+    
+    
+    
+def buildDataLoader(*tensors,TorchDataSetType,oSamplerType=None,**Args):
+    lib_torch = CPytorch().Lib
+    
+    if(Args.get('DataRecordArgs') != None):
+        DataSetArgs = Args['DataRecordArgs']
+        dataset = TorchDataSetType(*tensors,**DataSetArgs)
+    else:
+        dataset = TorchDataSetType(*tensors)
+    
+    if(Args.get('DataLoaderArgs') != None):
+        DataLoaderArgs = Args['DataLoaderArgs']
+        if(oSamplerType == None or Args.get('SamplerArgs') == None):
+            dataLoader = lib_torch.utils.data.DataLoader(dataset,**DataLoaderArgs)
+        else:
+            SamplerArgs = Args.get('SamplerArgs')
+#                print(SamplerArgs)
+#                return
+            oSampler = oSamplerType(dataset,**SamplerArgs)
+            dataLoader = lib_torch.utils.data.DataLoader(dataset,sampler=oSampler,**DataLoaderArgs)
+    else:
+        dataLoader = lib_torch.utils.data.DataLoader(dataset)
+    
+    return dataLoader
