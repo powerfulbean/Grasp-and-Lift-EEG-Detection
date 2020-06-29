@@ -11,7 +11,7 @@ from StellarBrainwav.Helper.DataObjectTransform import CEpochToDataLoader, CData
 from StellarBrainwav.DataProcessing.DeepLearning import CTorchNNYaml,CPytorch,CTorchClassify
 from StellarBrainwav.DataProcessing.SignalProcessing import MNECutInFreqBands
 from MiddleWare import CGALEDRawData, CGALEDLabels, keysFunc, getSeriesId, CCRNN,CSlidingWinDataset,CCRNNChannels #getSeriesName, getSubjectName, getSeqIndex,
-from MiddleWare import buildDataLoader,keysFuncFileName
+from MiddleWare import buildDataLoader,keysFuncFileName, CExperimentLog
 
 '''
 the *_data.csv files contain the raw 32 channels EEG data (sampling rate 500Hz)
@@ -163,27 +163,29 @@ if oStageCtrl(7) is True:
     
         del oDataTemp
         del oEventTemp
-        if(idx >=7):
-            break
 
 if oStageCtrl(8) is True:    
     #to do:
     # try different window size
+    oExperimentLog = CExperimentLog()
     cnnDir = oDir['Models']+'RCNN_CNN.yml'
     denseDir = oDir['Models']+'RCNN_Dense.yml'
+    nEpoch  = 10
+    lr = 0.001
+    weight_decay = 0.001
     oCRNN = CCRNN(cnnDir,denseDir,256,100).cuda()
     oDataRecordTrain = oDataOrgTrain.dataRecordBasedOnTime()
     oDataRecordTest = oDataOrgTest.dataRecordBasedOnTime()
     oTensorsTrans = CDataRecordToTensors()
     
     argsTrain = {'DataRecordArgs':{'window':100},
-            'DataLoaderArgs':{'shuffle':False,'batch_size':200},
-            'SamplerArgs':{'replacement':True,'num_samples':200000}
+            'DataLoaderArgs':{'shuffle':False,'batch_size':5000},
+            'SamplerArgs':{'replacement':True,'num_samples':20000000}
             }
     
     argsTest = {'DataRecordArgs':{'window':100},
-            'DataLoaderArgs':{'shuffle':False,'batch_size':200},
-            'SamplerArgs':{'replacement':True,'num_samples':200000}
+            'DataLoaderArgs':{'shuffle':True,'batch_size':5000},
+#            'SamplerArgs':{'replacement':True,'num_samples':1000000}
             }
     
     pytorchRoot = CPytorch().Lib
@@ -194,12 +196,24 @@ if oStageCtrl(8) is True:
     testDataLoader = buildDataLoader(*testDataTensors,TorchDataSetType = CSlidingWinDataset,oSamplerType = samplerType,**argsTest)
     
     oLossFunc = pytorchRoot.nn.BCELoss()
-    metrics = CTorchClassify().modelTranEval(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
+    metrics = CTorchClassify().modelTranEval(oCRNN,trainDataLoader,testDataLoader,nEpoch,lr,weight_decay,oLossFunc)
     
+    oExperimentLog['cnnDir'] = cnnDir
+    oExperimentLog['denseDir'] = denseDir
+    oExperimentLog['nEpoch'] = nEpoch
+    oExperimentLog['lr'] = lr
+    oExperimentLog['weight_decay'] = weight_decay
+    oExperimentLog['argsTrain'] = argsTrain
+    oExperimentLog['argsTest'] = argsTest
+    oExperimentLog['LossFunc'] = oLossFunc
+    outputList = oExperimentLog.readable()
+    for r in range(len(outputList)-1):
+        oLog(outputList[r])
     oLog.safeRecord('#train_loss\ttest_loss\ttrain_accu\ttest_accu')
     for metric in metrics:
         logTemp = str(metric[0]) + '\t' + str(metric[1]) + '\t' + str(metric[2]) + '\t' + str(metric[3])
         oLog.safeRecord(logTemp)
+    oLog(*outputList[-1])
     pytorchRoot.save(oCRNN,oDir['Output'] + 'KLGModel.pth')
     
     #load model 

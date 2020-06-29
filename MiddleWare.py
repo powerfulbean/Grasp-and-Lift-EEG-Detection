@@ -183,3 +183,25 @@ def buildDataLoader(*tensors,TorchDataSetType,oSamplerType=None,**Args):
         dataLoader = lib_torch.utils.data.DataLoader(dataset)
     
     return dataLoader
+
+
+class CExperimentLog:
+    
+    def __init__(self):
+        self.dict = dict()
+        
+    def __setitem__(self,key,value):
+        self.dict[key] = value
+        
+    def readable(self):
+        output = list()
+        maxStrLen = max([len(str(self.dict[key])) for key in self.dict])
+        strLine = ''.join(['*'] * (maxStrLen + 5 ))
+        output.append(strLine)
+        for key in self.dict:
+            output.append( str(key) + ': ' + str(self.dict[key]))
+        output.append(strLine)
+        return output
+        
+            
+        
