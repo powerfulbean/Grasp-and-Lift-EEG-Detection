@@ -163,6 +163,9 @@ if oStageCtrl(7) is True:
     
         del oDataTemp
         del oEventTemp
+        
+        if (idx > 7):
+            break
 
 if oStageCtrl(8) is True:    
     #to do:
@@ -170,7 +173,7 @@ if oStageCtrl(8) is True:
     oExperimentLog = CExperimentLog()
     cnnDir = oDir['Models']+'RCNN_CNN.yml'
     denseDir = oDir['Models']+'RCNN_Dense.yml'
-    nEpoch  = 10
+    nEpoch  = 5
     lr = 0.001
     weight_decay = 0.001
     oCRNN = CCRNN(cnnDir,denseDir,256,100).cuda()
@@ -179,13 +182,13 @@ if oStageCtrl(8) is True:
     oTensorsTrans = CDataRecordToTensors()
     
     argsTrain = {'DataRecordArgs':{'window':100},
-            'DataLoaderArgs':{'shuffle':False,'batch_size':5000},
-            'SamplerArgs':{'replacement':True,'num_samples':20000000}
+            'DataLoaderArgs':{'shuffle':False,'batch_size':200},
+            'SamplerArgs':{'replacement':True,'num_samples':400}
             }
     
     argsTest = {'DataRecordArgs':{'window':100},
-            'DataLoaderArgs':{'shuffle':True,'batch_size':5000},
-#            'SamplerArgs':{'replacement':True,'num_samples':1000000}
+            'DataLoaderArgs':{'shuffle':False,'batch_size':200},
+            'SamplerArgs':{'replacement':True,'num_samples':400}
             }
     
     pytorchRoot = CPytorch().Lib
@@ -213,7 +216,7 @@ if oStageCtrl(8) is True:
     for metric in metrics:
         logTemp = str(metric[0]) + '\t' + str(metric[1]) + '\t' + str(metric[2]) + '\t' + str(metric[3])
         oLog.safeRecord(logTemp)
-    oLog(*outputList[-1])
+    oLog(outputList[-1])
     pytorchRoot.save(oCRNN,oDir['Output'] + 'KLGModel.pth')
     
     #load model 
