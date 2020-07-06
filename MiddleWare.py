@@ -111,26 +111,24 @@ class CCRNN(pytorchRoot.nn.Module):
 class CCRNNChannels(pytorchRoot.nn.Module):
     def __init__(self,cnnDir,denseDir,lstmInSize,lstmHidSize):
         super().__init__()
-        self.oLstm = nn.LSTM(input_size = lstmInSize,hidden_size = lstmHidSize)
+        self.oLstm = nn.LSTM(input_size = lstmInSize,hidden_size = lstmHidSize,batch_first = True)
         oCNNYaml = CTorchNNYaml()
         self.oCNN = oCNNYaml(cnnDir)
         self.oDense = oCNNYaml(denseDir)
         
     def forward(self,x):
-        #input shape ( batch, num_seq,input_size)     
+        #input shape ( batch, num_seq,num_channels,input_size)     
         
         xCNNList = list()
-        for i in range(x.shape[0]):
-#            print(x[i])
-            xCNNTemp = x[i] # shape (batch,input_size)
-            xCNNTemp1 = xCNNTemp
-            xCNNOutTemp = self.oCNN(xCNNTemp1)# shape (batch,output_size)
-            xCNNOutTemp = xCNNOutTemp.view(1,xCNNOutTemp.shape[0],xCNNOutTemp.shape[1])
+        for i in range(x.shape[1]):
+            xCNNTemp = x[:,i,:,:] # shape (batch,num_channels,input_size)
+            xCNNOutTemp = self.oCNN(xCNNTemp)# shape (batch,output_size)
+            xCNNOutTemp = xCNNOutTemp.view(xCNNOutTemp.shape[0],1,xCNNOutTemp.shape[1])
             xCNNList.append(xCNNOutTemp) 
         
-        xCNNOut = pytorchRoot.cat(xCNNList,0)
+        xCNNOut = pytorchRoot.cat(xCNNList,1)
         xLSTMOut = self.oLstm(xCNNOut)
-        xDenseOut = self.oDense(xLSTMOut[0][-1])
+        xDenseOut = self.oDense(xLSTMOut[0][:,-1,:])
         return xDenseOut
 
 class CSlidingWinDataset(pytorchRoot.utils.data.Dataset):

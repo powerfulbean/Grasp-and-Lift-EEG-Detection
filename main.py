@@ -17,7 +17,7 @@ from MiddleWare import buildDataLoader,keysFuncFileName, CExperimentLog
 the *_data.csv files contain the raw 32 channels EEG data (sampling rate 500Hz)
 the *_events.csv files contains the ground truth frame-wise labels for all events
 '''
-stageList = [1,7,8]
+stageList = [1,7,9]
 
 
 dirList = ['Root','Train','Test','MiddleStage','Output','Models']
@@ -233,7 +233,7 @@ if oStageCtrl(9) is True:
     oRawTrain = oMNE.getMNERaw(oDataRecordTrain.data)
     oRawTest = oMNE.getMNERaw(oDataRecordTest.data)
     
-    bands = [0.5,4,7,15,30]
+    bands = [0.5,4,7]
     
     oBandedDataTrain = MNECutInFreqBands(oRawTrain,bands)
     oBandedDataTest = MNECutInFreqBands(oRawTest,bands)
@@ -241,7 +241,7 @@ if oStageCtrl(9) is True:
     oDataRecordTrain.data = oBandedDataTrain
     oDataRecordTest.data  = oBandedDataTest
     
-    oDataLoaderTrans = CDataRecordToTensors()
+    oTensorsTrans = CDataRecordToTensors()
     
     argsTrain = {'DataRecordArgs':{'window':100},
             'DataLoaderArgs':{'shuffle':False,'batch_size':100},
@@ -257,7 +257,6 @@ if oStageCtrl(9) is True:
     samplerType = pytorchRoot.utils.data.RandomSampler
     pytorchRoot = CPytorch().Lib
     samplerType = pytorchRoot.utils.data.RandomSampler
-    oTensorsTrans = CRawDataToTensors()
     trainDataTensors = oTensorsTrans(oDataRecordTrain)
     testDataTensors = oTensorsTrans(oDataRecordTest)
     trainDataLoader = buildDataLoader(*trainDataTensors,TorchDataSetType = CSlidingWinDataset,oSamplerType = samplerType,**argsTrain)
@@ -267,7 +266,7 @@ if oStageCtrl(9) is True:
     oLossFunc = pytorchRoot.nn.BCELoss()
     
     oCRNN = CCRNNChannels(cnnDir,denseDir,256,100).cuda()
-    metrics = CPytorch().trainClassificationModel(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
+    metrics = CTorchClassify().modelTranEval(oCRNN,trainDataLoader,testDataLoader,10,0.001,0.001,oLossFunc)
     
 if oStageCtrl(10) is True:
     import numpy as np
